@@ -1,15 +1,8 @@
-from typing import List, Optional, Dict
-
+from typing import List, Optional, Dict, Tuple
 import torch
-from torch import nn
-
 import torchvision
-from torchvision.models import ResNet50_Weights
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-from torchvision.models.detection.rpn import AnchorGenerator, RegionProposalNetwork, RPNHead
-from torchvision.models.detection.image_list import ImageList
-
-from torchvision.ops import box_iou, generalized_box_iou
+from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection import FasterRCNN
 
 import logging
@@ -18,9 +11,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import sys
+
 sys.path.append("..")
 from config import device_name
+
 device = torch.device(device_name)
+
 
 class RoIRPN(FasterRCNN):
     def __init__(self, min_size=180, max_size=320):
@@ -63,12 +59,12 @@ class RoIRPN(FasterRCNN):
         self.rpn.nms_thresh = 0.7
 
         self.rpn._pre_nms_top_n = {
-            "training": 2000, 
+            "training": 2000,
             "testing": 1000
         }
 
         self.rpn._post_nms_top_n = {
-            "training": 2000, 
+            "training": 2000,
             "testing": 1000
         }
 
@@ -130,8 +126,9 @@ class RoIRPN(FasterRCNN):
 
         return rpn_loss + roi_loss, rpn_loss, roi_loss
 
+
 class Detector:
-    def __init__(self, model_path: str="extractor/best_rpn.pth"):
+    def __init__(self, model_path: str = "extractor/best_rpn.pth"):
         self.model = RoIRPN()
 
         try:
@@ -153,18 +150,11 @@ class Detector:
         test_input = torch.randn(1, 3, 224, 224).to(device)  # 假设1帧输入
         with torch.no_grad():
             _ = self.model(test_input)
-    
-    def __call__(self, image: torch.Tensor) -> torch.Tensor:
-        """
-        执行目标检测
-        参数：
-        - image: 形状为 [channels, height, width] 的float32张量
-                 数值范围建议为[0, 1]（与训练时预处理一致）
-        返回：
-        - 检测结果，包含边界框、置信度和标签
-        """
-        with torch.no_grad():
-            proposal = self.model(image.to(device))
-            proposal = proposal[0]['boxes'][0].cpu().numpy().astype(int)
-        return proposal
 
+    def __call__(self, image: torch.Tensor) -> List[Tuple]:
+        ret = []
+        with torch.no_grad():
+            proposals = self.model(image.to(device))
+            for proposal in proposals:
+                ret.append(proposal['boxes'][0].cpu().numpy().astype(int))
+        return ret

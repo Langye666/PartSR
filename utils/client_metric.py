@@ -1,4 +1,3 @@
-import decord
 import os
 import numpy as np
 import cv2
@@ -8,6 +7,7 @@ import torch
 import pandas as pd
 from skimage.metrics import structural_similarity as ssim
 from config import config
+
 gpu_id = config["gpu_id"]
 device_name = f"cuda:{gpu_id}" if (torch.cuda.is_available() and gpu_id < torch.cuda.device_count()) else "cpu"
 
@@ -20,28 +20,6 @@ def compute_psnr(img1: np.ndarray, img2: np.ndarray) -> float:
 
 def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     return ssim(img1, img2, multichannel=True, data_range=255, channel_axis=0)
-
-def decode_video(filename: str) -> Tuple[np.ndarray, float]:
-    video_reader = decord.VideoReader(
-        filename,
-        ctx=decord.cpu(0) if device_name == "cpu" else decord.gpu(int(device_name.split(":")[1])),
-        num_threads=4,  # 多线程加速
-    )
-    frames = video_reader.get_batch(range(len(video_reader))).asnumpy()  # 转为numpy数组
-    frames = frames.transpose(0, 3, 1, 2)
-    fps = video_reader.get_avg_fps()
-    print(filename, "gt_shape:", frames.shape)
-    return frames, fps
-
-def decode_bytes_to_numpy(bytes_data: bytes) -> Tuple[np.ndarray, float]:
-    with open("/dev/shm/decord_temp.tmp", "wb") as f:
-        f.write(bytes_data)
-    frames, fps = decode_video("/dev/shm/decord_temp.tmp")
-    try:
-        os.remove("/dev/shm/decord_temp.tmp")
-    except FileNotFoundError:
-        pass
-    return frames, fps
 
 def load_gt_roi(w_gt: int, h_gt: int, gt_roi_folder: str) -> List[Tuple[int, int, int, int]]:
     gt_roi_list = []

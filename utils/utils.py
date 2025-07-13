@@ -1,5 +1,7 @@
 import os
 import subprocess
+
+import decord
 import torch
 import numpy as np
 import cv2
@@ -8,6 +10,7 @@ from typing import Tuple, List
 from mvextractor.videocap import VideoCap
 
 from config import config
+from utils.client_metric import device_name
 
 ffmpeg = config["ffmpeg"]
 ffmpeg_residual = config["ffmpeg_residual"]
@@ -43,7 +46,7 @@ def roi_center_to_xyxy(roi_center: List[Tuple[int, int]], SR_size: int, frame_sh
         xyxy.append([x1, y1, x2, y2])
     return np.array(xyxy)
 
-def decode_residual(filename: str, frame_num: int) -> np.ndarray:
+def ffmpeg_decode_residual(filename: str, frame_num: int) -> np.ndarray:
     cmd = [
         ffmpeg_residual, "-loglevel", "error",
         "-i", filename, "-f", "null", "-"
@@ -65,17 +68,17 @@ def decode_residual(filename: str, frame_num: int) -> np.ndarray:
     ptr = 0
     residual_list = []
     while ptr < len(mb_data):
-        frame_idx = int.from_bytes(mb_data[ptr:ptr+4], 'little')
-        mb_width = int.from_bytes(mb_data[ptr+4:ptr+8], 'little')
-        mb_height = int.from_bytes(mb_data[ptr+8:ptr+12], 'little')
+        frame_idx = int.from_bytes(mb_data[ptr:ptr + 4], 'little')
+        mb_width = int.from_bytes(mb_data[ptr + 4:ptr + 8], 'little')
+        mb_height = int.from_bytes(mb_data[ptr + 8:ptr + 12], 'little')
         mb_frame_size = 12 + mb_width * mb_height
         if 0 <= frame_idx < frame_num:
-            area_ops = np.frombuffer(mb_data[ptr+12:ptr+mb_frame_size], dtype=np.uint8).reshape((mb_width, mb_height))
-            residual_list.append(area_ops.sum())
+            area_ops = np.frombuffer(mb_data[ptr + 12:ptr + mb_frame_size], dtype=np.uint8)
+            residual_list.append(area_ops)
         ptr += mb_frame_size
     return np.array(residual_list)
 
-def decode_mv_residual(video_bytes: bytes, identifier: str, limit: int=0)\
+def ffmpeg_decode_mv_residual(video_bytes: bytes, identifier: str, limit: int=0)\
         -> Tuple[np.ndarray, float, List[List], List[str], np.ndarray]: # limit is only for debug
     tmp_name = f"/dev/shm/{identifier}.mp4"
     with open(tmp_name, "wb") as f:
@@ -116,9 +119,9 @@ def decode_mv_residual(video_bytes: bytes, identifier: str, limit: int=0)\
     all_frames = np.array(all_frames)
     assert all_frames.shape[1] % 4 == 0 and all_frames.shape[2] % 4 == 0
     video_area = all_frames.shape[1] * all_frames.shape[2]
-    residual_list = decode_residual(tmp_name, all_frames.shape[0]) / video_area # pixel average
+    residual_arr = ffmpeg_decode_residual(tmp_name, all_frames.shape[0]) / video_area # pixel average
     del_if_exist(tmp_name)
-    return all_frames, framerate, all_motion_vectors, all_types, residual_list
+    return all_frames, framerate, all_motion_vectors, all_types, residual_arr
 
 def ffmpeg_tensor_to_bytes(frames_tensor: torch.Tensor, framerate: float, identifier: str) -> bytes:
     N, C, H, W = frames_tensor.shape
@@ -158,6 +161,32 @@ def ffmpeg_tensor_to_bytes(frames_tensor: torch.Tensor, framerate: float, identi
     del_if_exist(ff_out_name)
     del_if_exist(ff_out_vid)
     return video
+
+def decord_video2numpy(filename: str, threads: int=6) -> Tuple[np.ndarray, float]:
+    """
+    uint8, 0~255, NCHW, RGB
+    """
+    video_reader = decord.VideoReader(
+        filename,
+        ctx=decord.cpu(0) if device_name == "cpu" else decord.gpu(int(device_name.split(":")[1])),
+        num_threads=threads,  # 多线程加速
+    )
+    frames = video_reader.get_batch(range(len(video_reader))).asnumpy()  # 转为numpy数组
+    frames = frames.transpose(0, 3, 1, 2)
+    fps = video_reader.get_avg_fps()
+    print(filename, "gt_shape:", frames.shape)
+    return frames, fps
+
+def decord_bytes2numpy(bytes_data: bytes, threads: int=6) -> Tuple[np.ndarray, float]:
+    """
+    uint8, 0~255, NCHW, RGB
+    """
+    tmp_name = "/dev/shm/decord_temp.tmp"
+    with open(tmp_name, "wb") as f:
+        f.write(bytes_data)
+    frames, fps = decord_video2numpy(tmp_name, threads)
+    del_if_exist(tmp_name)
+    return frames, fps
 
 def show_frame(tensor_frame):
     # 将CHW Tensor转为HWC numpy数组
@@ -221,7 +250,7 @@ def test_mv(stream, stat_lim):
     plt.show()
 
 def test_residual(stream, stat_lim):
-    tensor_mv, framerate, mvs, types, residual_list = decode_mv_residual(stream, "Temp", stat_lim)
+    tensor_mv, framerate, mvs, types, residual_list = ffmpeg_decode_mv_residual(stream, "Temp", stat_lim)
     print(residual_list)
     x = np.arange(len(residual_list))
     plt.figure(figsize=(6, 6), dpi=200)

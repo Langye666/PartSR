@@ -23,29 +23,19 @@ batch_size = config["batch_size"]
 prefixes = ["super_resolution/models/", "models/"]
 
 # 并行的超分辨率处理函数
-def mp_server_sr(sr_queue, pipe_conn, result_dict, queue_lock, dnn_queue_counts):
+def mp_server_sr(sr_queue, pipe_conn):
     torch.manual_seed(42)
     inferrer = Inferrer(dnn_pth_list)
     # 将 run_benchmark 的结果发送回主进程
     pipe_conn.send(inferrer.run_benchmark())
     pipe_conn.close()  # 关闭管道连接
     while True:
-        identifier, tensors, SR_size, action = sr_queue.get()
-        if tensors is None:
+        tmp_pipe, tensors, SR_size, action = sr_queue.get()
+        if tmp_pipe is None:
             break
-        result = inferrer.super_resolution(tensors, SR_size, action=action)
-        result_dict[identifier] = result
-        with queue_lock:
-            dnn_queue_counts[action] -= 1
-
-def mp_client_sr(sr_queue, result_dict):
-    inferrer = Inferrer(dnn_pth_list)
-    while True:
-        identifier, tensors, SR_size, action = sr_queue.get()
-        if tensors is None:
-            break
-        result = inferrer.super_resolution(tensors, SR_size, action=action)
-        result_dict[identifier] = result
+        result = inferrer(tensors, SR_size, action=action)
+        tmp_pipe.send(result)
+        tmp_pipe.close()
 
 def measure_time(model: torch.nn.Module, w, h, vsr_model, warmup=3):
     """测量给定尺寸下的推理时间"""
@@ -98,7 +88,6 @@ def generate_sr_patch(tensors: torch.Tensor, roi_list: np.ndarray) -> torch.Tens
     Args:
         tensors: 输入图像批次 (B, C, H, W)
         roi_list: 每张图像的ROI坐标 [(x1, y1, x2, y2), ...]
-        pad: 为避免边缘效应扩展的像素数量
 
     Returns:
         (B, C, H + pad * 2, W + pad * 2)
@@ -209,10 +198,11 @@ class Inferrer:
             r_squared = 1 - (ss_res / ss_tot)
             r_value = np.sqrt(r_squared)
             print(f"{type(model)}: y={slope:.4e}x+{intercept:.4e}, r = {r_value}")
-            ret.append(float(slope))
+            ret.append((float(slope), float(intercept)))
+        print("[PartSR SR process] benchmark done")
         return ret
     
-    def super_resolution(self, tensors: torch.Tensor, SR_size: int, action: int, scale_factor: int=4) -> torch.Tensor:
+    def __call__(self, tensors: torch.Tensor, SR_size: int, action: int, scale_factor: int=4) -> torch.Tensor:
         """
         Args:
             tensors: input patches (B, C, H, W)

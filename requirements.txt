@@ -3,6 +3,7 @@ decord
 Flask
 Flask-Cors
 matplotlib
+motion-vector-extractor
 numpy
 opencv-python
 opencv-contrib-python

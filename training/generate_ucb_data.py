@@ -12,8 +12,7 @@ from typing import List, Tuple, Dict, Any, Optional
 
 from super_resolution.infer import Inferrer, generate_sr_patch
 from config import device_name, config
-from utils.client_metric import decode_video, decode_bytes_to_numpy
-from utils.utils import roi_center_to_xyxy, ffmpeg_tensor_to_bytes
+from utils.utils import roi_center_to_xyxy, ffmpeg_tensor_to_bytes, decord_video2numpy, decord_bytes2numpy
 
 from skimage.metrics import structural_similarity as ssim
 
@@ -39,7 +38,7 @@ class SimulatedSR:
         tensor_for_SR = generate_sr_patch(tensors, roi_xyxy)
         patch_gen_time = time.perf_counter() - st
         st = time.perf_counter()
-        sr = self.inferrer.super_resolution(tensor_for_SR, SR_size, action)
+        sr = self.inferrer.__call__(tensor_for_SR, SR_size, action)
         sr_time = time.perf_counter() - st
         return sr, patch_gen_time, sr_time
 
@@ -66,7 +65,7 @@ def process_folder(root_path: str, folder: str, sr: SimulatedSR) -> List[Dict[st
         annotation_data = json.load(f)
 
     # 加载720p视频
-    ndarray_720p, fps = decode_video(os.path.join(data_folder, video_720p)) # NCHW, RGB
+    ndarray_720p, fps = decord_video2numpy(os.path.join(data_folder, video_720p)) # NCHW, RGB
 
     init_path = os.path.join(data_folder, "init-stream0.m4s")
     with open(init_path, 'rb') as f:
@@ -78,7 +77,7 @@ def process_folder(root_path: str, folder: str, sr: SimulatedSR) -> List[Dict[st
             chunk_data = f.read()
 
         video_bytes = init_data + chunk_data
-        ndarray_180p, fps_ = decode_bytes_to_numpy(video_bytes)
+        ndarray_180p, fps_ = decord_bytes2numpy(video_bytes)
         assert fps == fps_
 
         scaled = np.zeros((ndarray_180p.shape[0], *(ndarray_720p.shape[1:])))
@@ -107,7 +106,7 @@ def process_folder(root_path: str, folder: str, sr: SimulatedSR) -> List[Dict[st
                 reencode = ffmpeg_tensor_to_bytes(sr_patch, fps, 'generator')
                 encode_time = time.perf_counter() - st
 
-                sr_numpy, fps = decode_bytes_to_numpy(reencode)
+                sr_numpy, fps = decord_bytes2numpy(reencode)
 
                 # metrics
                 avg_ssim = 0
