@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 
 def init_tracker(frame: np.ndarray, roi: Tuple[int, int, int, int]) -> cv2.Tracker:
-    tracker = cv2.TrackerKCF_create()
+    tracker = cv2.TrackerMOSSE_create()
     tracker.init(frame, roi)
     return tracker
 
@@ -16,4 +16,4 @@ def track(tracker: cv2.Tracker, frame: np.ndarray) -> Tuple[bool, int, int, int,
         return False, 0, 0, 0, 0
 
 if __name__ == "__main__":
-    print(type(cv2.TrackerKCF_create()))
+    print(type(cv2.TrackerMOSSE_create()))
