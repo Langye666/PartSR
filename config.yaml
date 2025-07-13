@@ -8,7 +8,7 @@ ffmpeg_residual: "/home/yosame/Desktop/Grad_Proj/FFmpeg-Residual/ffmpeg_residual
 source_server: "http://localhost:23333"
 edge_port: 11451
 
-edge_server: "http://localhost:11451" # "http://172.22.5.108:11451"
+edge_server: "http://172.22.5.108:11451"
 
 video_width: 180
 video_height: 320
@@ -19,8 +19,8 @@ classify_model_path: "models/classifier.pth"
 beta: 1.8
 dyn_thres: 6.6
 
-sr_models: ["EDSR_S_x4_0.8799.pth", "BasicVSR_Vimeo90K_BIx4-2a29695a.pth"]
-vsr_models: [false, true]
-batch_size: [120, 120] # for VSR models, set the clip length instead of the number of videos
+sr_models: ["EDSR_S_x4_0.8799.pth"]
+vsr_models: [false]
+batch_size: [60] # for VSR models, set the clip length instead of the number of videos
 pad: 5 # expand SR range to avoid edge effect
 sr_sizes: [60, 90]

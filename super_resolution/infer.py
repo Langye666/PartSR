@@ -171,7 +171,7 @@ class Inferrer:
         
     def run_benchmark(self) -> List[float]:
         print("running benchmark...")
-        min_size = 80
+        min_size = 56
         # max_size = 400
         max_size = 96
         step = 8
@@ -185,7 +185,7 @@ class Inferrer:
                 # for w in sizes:
                 with torch.no_grad():
                     elapsed_time = measure_time(model, h, h, vsr_models[idx])
-                x.append(h * h)
+                x.append(h)
                 y.append(elapsed_time)
                 # print(f"size: {h}, time: {elapsed_time:.4f}s")
             linear_fit = np.polyfit(x, y, 1)  # 一次多项式拟合

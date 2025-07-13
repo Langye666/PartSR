@@ -96,7 +96,7 @@ class WaitHandler:
             elapsed = time.perf_counter() - self.shared_sr_wait_current_begin.value
             if elapsed > self.shared_sr_wait_now.value:
                 elapsed = self.shared_sr_wait_now.value
-            return self.shared_sr_wait_tot - elapsed
+            return self.shared_sr_wait_tot.value - elapsed
 
 class EdgePartSR(Edge):
     def __init__(self):
@@ -121,7 +121,7 @@ class EdgePartSR(Edge):
         # schedule by order
         self.schedule_lock = mp.Lock()
         self.shared_sr_number = mp.Value(ctypes.c_int, 0)
-        self.shared_sr_send = mp.Value(ctypes.c_int, 0) # only use in __send_task
+        self.shared_sr_send = mp.Value(ctypes.c_int, 1) # only use in __send_task
         self.shared_not_send_list = self.manager.dict()
         self.client_sr_speed = {}
 
@@ -167,7 +167,7 @@ class EdgePartSR(Edge):
             self.hist_encode.value = (new_time + self.hist_encode.value) / 2
         self.hist_encode.release()
 
-    def __handle(self, identifier: str, received: bytes, args: Dict) -> bytes:
+    def _handle(self, identifier: str, received: bytes, args: Dict) -> bytes:
         if identifier not in self.streamer_status:
             raise RuntimeError("Found no header " + identifier)
         print(f'[PartSR] received {len(received)} bytes')

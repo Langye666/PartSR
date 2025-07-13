@@ -50,7 +50,7 @@ class EdgeFullSR(Edge):
             process_b.terminate()
             exit(-1)
 
-    def __handle(self, identifier: str, received: bytes, args) -> bytes:
+    def _handle(self, identifier: str, received: bytes, args) -> bytes:
         if identifier not in self.streamer_status:
             raise RuntimeError("Found no header " + identifier)
         status = self.streamer_status[identifier]

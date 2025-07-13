@@ -1,27 +1,40 @@
 import torch
 import logging
-# from .schedule_model import NeuralUCB0
+from typing import List, Dict, Tuple
+
+from scheduler.env_encoder import ArmContextGenerator
+from config import device_name
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Scheduler:
-    def __init__(self, model_path: str):
-        self.model = None
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    def __init__(self, model_path: str, sr_model_features: List):
         try:
-            # self.model = NeuralUCB0(input_dim=20)
+            context_generator = ArmContextGenerator(sr_model_features)
+            state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
+            context_generator.load_state_dict(state_dict)
+            self.context_generator = context_generator.to(device_name)
             logger.info("Scheduler has been successfully initialized")
         except Exception as e:
             logger.error(f"Scheduler initialization failed: {str(e)}", exc_info=True)
             self.model = None
 
-    def infer(self, size, user, queue, latency) -> int:
-        raise NotImplementedError("Scheduler has not been implemented yet.")
-        assert len(size) == 2
-        context = [size[0], size[1]]
-        # context.extend([np.mean(roi_areas), np.std(roi_areas), np.max(roi_areas), np.min(roi_areas)])
-        context.extend(user)
-        context.extend(queue)
-        context.extend(latency)
-        return 0  # self.model.select_action(context)
+        self.sr_model_features = sr_model_features
+
+    def __call__(self, env: Dict[str, float], video_clip: torch.Tensor) -> Tuple[int, int]:
+        bandwidth = env['bandwidth']
+        sr_queue = env['sr_queue']
+        buffer = env['buffer']
+        sr_size = env['sr_size']
+
+        # 客户端处理不考虑编码时间
+        context = []
+        for idx, model_feat in enumerate(self.model_feat):
+            arm_feat = list(model_feat.values())
+            arm_feat[0] *= env_array[-1] # k * size
+            context.append(np.array(env_array[:-1] + arm_feat))
+        context = np.array(context)
+        self.cached_context = context
+        self.cached_action = self.neural_ucb.take_action(context)
+        return self.cached_action

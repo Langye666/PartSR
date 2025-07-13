@@ -108,7 +108,7 @@ class RoIExtractor:
         residual = 0
         for mb_y in range(0, self.ndarray.shape[1], 16):
             for mb_x in range(0, self.ndarray.shape[2], 16):
-                residual += self.residual_arr[mb_id] * (1 - calc_IoU((mb_x, mb_y, mb_x + 16, mb_y + 16), (x1, y1, x2, y2)))
+                residual += self.residual_arr[idx][mb_id] * (1 - calc_IoU((mb_x, mb_y, mb_x + 16, mb_y + 16), (x1, y1, x2, y2)))
                 mb_id += 1
         return motion + beta * residual
 

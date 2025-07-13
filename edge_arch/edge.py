@@ -12,12 +12,12 @@ class Edge:
             self.init_args(identifier, args)
             return received
         else:
-            return self.__handle(identifier, received, args)
+            return self._handle(identifier, received, args)
 
     def init_args(self, identifier: str, args: Dict[str, Any]):
         pass
 
-    def __handle(self, identifier: str, received: bytes, args) -> bytes:
+    def _handle(self, identifier: str, received: bytes, args) -> bytes:
         """
         Override this function to handle the video at edge server
 
