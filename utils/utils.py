@@ -168,7 +168,7 @@ def decord_video2numpy(filename: str, threads: int=6) -> Tuple[np.ndarray, float
     """
     video_reader = decord.VideoReader(
         filename,
-        ctx=decord.cpu(0) if device_name == "cpu" else decord.gpu(int(device_name.split(":")[1])),
+        ctx=decord.cpu(0),
         num_threads=threads,  # 多线程加速
     )
     frames = video_reader.get_batch(range(len(video_reader))).asnumpy()  # 转为numpy数组
