@@ -4,11 +4,15 @@ from typing import Dict, Any
 class Edge:
     def __init__(self):
         self.manager = Manager()
-        self.streamer_status = self.manager.dict() # save header and other info of different streams
+        self.streamers = self.manager.dict() # save header and other info of different streams
 
-    def receive(self, identifier: str, received: bytes, args, is_init: bool) -> bytes:
+    def receive(self, identifier: str, received: bytes, args: Dict, is_init: bool) -> bytes:
+        print(f"[Edge] received: {identifier}, is_init: {is_init}, args: {args}")
         if is_init:
-            self.streamer_status[identifier]['header'] = received
+            if identifier not in self.streamers:
+                self.streamers[identifier] = {'header': received}
+            else:
+                self.streamers[identifier]['header'] = received
             self.init_args(identifier, args)
             return received
         else:
@@ -24,4 +28,4 @@ class Edge:
         :param identifier: Identify the video to distinguish different streamers
         :param received: Binary data from server
         """
-        return self.streamer_status[identifier]['header'] + received
+        return self.streamers[identifier]['header'] + received

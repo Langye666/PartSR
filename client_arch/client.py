@@ -1,3 +1,5 @@
+import math
+
 import cv2
 import numpy as np
 from typing import List, Dict, Any, Tuple
@@ -29,21 +31,50 @@ class Client:
             for i in range(clip.shape[0]):
                 global_idx = clip.shape[0] * idx + i
                 # 转换为OpenCV格式 (HWC, BGR)
-                scaled_viz = self.cached[i].transpose(1, 2, 0)[:, :, ::-1].copy()  # RGB to BGR
-                scaled_viz = np.ascontiguousarray(scaled_viz, dtype=np.uint8)
-                x, y, w, h = gt_roi[global_idx]
-                x1_gt = x * width
-                y1_gt = y * height
-                x2_gt = (x + w) * width
-                y2_gt = (y + h) * height
-                cv2.rectangle(scaled_viz, (x1_gt, y1_gt), (x2_gt, y2_gt), (0, 0, 255), 2)  # 绘制真实ROI (红色框)
-                # 添加文字说明
-                cv2.putText(scaled_viz, f"Frame: {i}", (10, 30),
+                frame = self.cached[i].transpose(1, 2, 0)[:, :, ::-1].copy()  # RGB to BGR
+                frame = np.ascontiguousarray(frame, dtype=np.uint8)
+                if annotate:
+                    x, y, w, h = gt_roi[global_idx]
+                    x1_gt = x * width
+                    y1_gt = y * height
+                    x2_gt = (x + w) * width
+                    y2_gt = (y + h) * height
+                    cv2.rectangle(frame, (x1_gt, y1_gt), (x2_gt, y2_gt), (0, 0, 255), 2)  # 绘制真实ROI (红色框)
+                    cv2.putText(frame, "Ground Truth ROI", (x1_gt, y1_gt - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
+                cv2.putText(frame, f"Frame: {i}", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-                cv2.putText(scaled_viz, "Ground Truth ROI", (x1_gt, y1_gt - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
-                # 写入视频帧
-                video_writer.write(scaled_viz)
+                video_writer.write(frame)
+            if lag_info[idx] > 0:
+                # 计算卡顿帧数（向上取整）
+                lag_frames = math.ceil(lag_info[idx] * 30)
+                last_frame = frame.copy()  # 获取当前块的最后一帧
+
+                # 在卡顿期间重复最后一帧并添加加载动画
+                for j in range(lag_frames):
+                    lag_frame = last_frame.copy()
+
+                    # 在右下角添加加载动画（三个动态小点）
+                    dot_radius = 5
+                    dot_spacing = 15
+                    start_x = width - 80
+                    start_y = height - 30
+
+                    # 计算当前帧的点状态（每10帧循环一次动画）
+                    phase = (j % 10) // 3  # 0-2: 哪个点高亮
+
+                    # 绘制三个点
+                    for k in range(3):
+                        color = (255, 255, 255) if k == phase else (100, 100, 100)
+                        center = (start_x + k * dot_spacing, start_y)
+                        cv2.circle(lag_frame, center, dot_radius, color, -1)
+
+                    # 添加"Buffering..."文字
+                    cv2.putText(lag_frame, f"Buffering: {lag_info[idx]:.1f}s",
+                                (width - 150, height - 60),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+
+                    video_writer.write(lag_frame)
         video_writer.release()
 
     def _handle(self, received: bytes) -> np.ndarray:
